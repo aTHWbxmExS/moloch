@@ -1,0 +1,52 @@
+name: previsioni
+
+on:
+  workflow_dispatch:
+    inputs:
+      lat:
+        description: "Latitudine"
+        required: true
+        type: string
+      lon:
+        description: "Longitudine"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: previsioni
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Dipendenze
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libeccodes-dev
+          pip install numpy requests eccodes
+      - name: Esegui
+        run: |
+          # letti dall'evento e mascherati, così non compaiono nei log
+          LAT=$(jq -r '.inputs.lat // empty' "$GITHUB_EVENT_PATH")
+          LON=$(jq -r '.inputs.lon // empty' "$GITHUB_EVENT_PATH")
+          echo "::add-mask::$LAT"
+          echo "::add-mask::$LON"
+          export LAT LON
+          python previsioni.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add latest.json storico
+          git diff --cached --quiet || git commit -m "update forecast"
+          git push
